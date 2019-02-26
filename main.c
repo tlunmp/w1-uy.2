@@ -7,15 +7,26 @@
 #include <sys/types.h>
 #include <sys/wait.h>	
 #include <sys/shm.h>
-
 #define SHMKEY 9785
 
 void helpMenu();
-void forkProcess(int maxChildProcess, int numberChildProcess);
-	
-int timer = 2;
+void forkProcess(int maxChildProcess, int numberChildProcess,char *inputFileName, char *outputFileName, int increment);
+void shareClock(int increment);
+int countLines(FILE *file);
+
+void signalCall(int signum);
+
+
+
+int timer = 10;
 int shmid;
 int *shmPtr;
+
+struct Clock {
+	int seconds;
+	int nanoseconds;
+	int duration;
+};
 
 int main (int argc, char *argv[]) {
 
@@ -28,6 +39,7 @@ int main (int argc, char *argv[]) {
 	int c;
 	int maxChildProcess = 0;
 	int numberChildProcess = 0;
+
 	
 
 	//getopt command for command line
@@ -70,19 +82,56 @@ int main (int argc, char *argv[]) {
 		newLineCount++;
 	fclose(f);
 
-	printf("%s",buffer);
-	forkProcess(maxChildProcess, numberChildProcess);
+	int increment = atoi(buffer);
+	int secClock = 0, nanoClock = 0;	
+	char *args[3];
+	int i, newLineCompare=0;
+	
+	FILE *f1 = fopen(inputFileName, "r");
+
+	  if (signal(SIGINT, signalCall) == SIG_ERR) {
+        	perror("Error: worker: signal(): SIGINT\n");
+        	exit(errno);
+  	  }
+
+
+	
+		
+	if (signal(SIGALRM, signalCall) == SIG_ERR) {
+         perror("Error: worker: signal(): SIGALRM\n");
+         exit(errno);
+     }
+
+	alarm(timer);
+	forkProcess(maxChildProcess, numberChildProcess,inputFileName,outputFileName,increment);
 		
 		
 	return 0;
 }	
 
 
-void forkProcess(int maxChildProcess, int numChildProcess) {
+void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, char *outputFileName,int increment) {
 		
-	int i, status, arr[2];
+	int status, arr[2];
+	char * args[2];
 
+	int bufSize = 100;
+	char buffer[bufSize];
+	
+	int newLineCount = 1;
+	int newLineCompare = 0;
+
+	int secClock = 0;
+	int nanoClock = 0;
+	
 	pid_t childpid;
+	int ptr_count = 0;
+
+
+	int maxChildCount = 0;
+
+
+	
 
 	if((shmid = shmget(SHMKEY, sizeof(arr[2]), 0777 | IPC_CREAT )) < 0){
            	printf("shmget failed in master\n");	
@@ -97,28 +146,199 @@ void forkProcess(int maxChildProcess, int numChildProcess) {
             	exit(2);	
         }
 
-	shmPtr[0] = 1000; 
-	shmPtr[1] = 1000; 
-	
-	for (i = 0;i < 1; i++){
-		
-		childpid = fork();
+	shmPtr[0] = 0; 
+	shmPtr[1] = 0; 
 
-		int status;
-		//fork Starts
-		if(childpid < 0) {
-			//snprintf(errorMessage, sizeof(errorMessage), "%s: Error", arg0Name);
-			//perror(errorMessage);	
-		} else if (childpid == 0){	
-	        	execl("./user", "user", NULL);
-        	
-		} else {
-			wait(&status);	
+	int flag = 0;
+		
+
+	
+	FILE *f1 = fopen(inputFileName,"r");
+
+	int  line = countLines(f1)-1;
+
+	int stackSize = line *3;
+	
+
+	
+	int i,m=0;
+	
+
+	struct Clock clock[stackSize];
+ 
+	while(fgets(buffer,bufSize,f1)!= 0){
+
+		if(newLineCount == newLineCompare) {
+
+			//parsing the text
+			for(i =0; i < 3; i++)
+	       		{
+				args[i] = (char*) malloc(3);
+
+	       		}
+
+			//extracting the commands
+	       		sscanf(buffer, "%s %s %s", args[0], args[1],args[2]);
+	
+			clock[m].seconds = atoi(args[0]);
+			clock[m].nanoseconds = atoi(args[1]);	
+			clock[m].duration = atoi(args[2]);	
+			m++;
+			newLineCount++;
 		}
+
+		newLineCompare++;
 	}
+	fclose(f1);
+/*
+		int l;
+		for(l=0; l<line; l++ ){
+
+			printf("%d %d %d\n", clock[l].seconds, clock[l].nanoseconds, clock[l].duration);
+		}
+*/
+
+		int s = 0;
+		int totalCount = 0;
+
+		while(i < line){
+				shmPtr[1] += increment;
+
+				if(shmPtr[1] > 1000000000){
+					shmPtr[0]++;
+					shmPtr[1] = 0;
+				}				
+				
+
+				if(shmPtr[0] == clock[s].seconds && shmPtr[1] > clock[s].nanoseconds){
+					
+					if(numChildProcess == ptr_count){
+						ptr_count--;
+					}	
+					
+					childpid = fork();
+					
+					totalCount++;
+					ptr_count++;
+				
+					if(childpid == 0){
+						char duration[100];
+						sprintf(duration, "%d", clock[s].duration);
+						execl("./user","user",duration,(char *)0);
+						exit(0);
+					} else {
+						childpid = wait(&status);
+					}
+				}				
+		}	
+		
+
+/*	for(;;){
+
+				
+				if(shmPtr[0] == clock[s].seconds && shmPtr[1] > clock[s].nanoseconds){
+					childpid = fork();
+					
+					while(waitpid(-1, &status, WNOHANG) > 0){
+						ptr_count--;
+					}
+
+
+					if(childpid == 0){
+						execl("./user","user",clock[s].duration);
+						printf("this is a child");
+					} else {
+						//flag = 1;
+						s++;
+					}
+				}
+
+
+				if(shmPtr[1] > 1000000000){
+					shmPtr[0]++;
+					shmPtr[1] = 0;
+				}
+				shmPtr[1] += 20000;
+			
+			
+			}
+*/
+
  }
 
 
+
+void signalCall(int signum)
+{
+    int status;
+  //  kill(0, SIGTERM);
+    if (signum == SIGINT)
+        printf("\nSIGINT received by master\n");
+    else
+        printf("\nSIGALRM received by master\n");
+ 
+    while(wait(&status) > 0) {
+        if (WIFEXITED(status))  /* process exited normally */
+                printf("worker process exited with value %d\n", WEXITSTATUS(status));
+        else if (WIFSIGNALED(status))   /* child exited on a signal */
+                printf("worker process exited due to signal %d\n", WTERMSIG(status));
+        else if (WIFSTOPPED(status))    /* child was stopped */
+                printf("worker process was stopped by signal %d\n", WIFSTOPPED(status));
+    }
+    kill(0, SIGTERM);
+    //clean up program before exit (via interrupt signal)
+    shmdt(shmPtr); //detaches a section of shared memory
+    shmctl(shmid, IPC_RMID, NULL);  // deallocate the memory
+   
+      exit(EXIT_SUCCESS);
+ }
+
+  
+   
+int countLines(FILE *file) {
+  int lines = 0;
+  char c;
+  char last = '\n';
+  while (EOF != (c = fgetc(file))) {
+    if (c == '\n' && last != '\n') {
+      ++lines;
+    }
+    last = c;
+  }
+  /* Reset the file pointer to the start of the file */
+  rewind(file);
+  return lines;
+}
+
+void shareClock(int increment){
+
+	int i,j;
+	pid_t childpid;
+
+
+	
+		for(;;) {
+	//			printf("%d and %d\n",shmPtr[0],shmPtr[1]);
+	//		if(secClockSet == shmPtr[0] && nanoClockSet > shmPtr[1]) {
+	//			//childpid = fork();
+				break;
+	//		}
+
+			if(shmPtr[1] > 1000000000) {
+				shmPtr[0]++;
+				shmPtr[1] = 0;
+			}
+
+		
+			shmPtr[1] += 20000;
+	
+		}
+
+
+
+//	printf("%d and %d\n",secClockSet,nanoClockSet);
+
+}
 //help menu
 void helpMenu() {
 		printf("---------------------------------------------------------------| Help Menu |--------------------------------------------------------------------------\n");
