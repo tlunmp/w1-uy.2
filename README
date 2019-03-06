@@ -1,0 +1,31 @@
+Ted Anthony L Uy
+CS4760
+Project 2
+
+The user input how many max processor, and max child process runing at same time, and read the file for seconds and nanoseconds then launch it on a certain time and print it on a file, then pass it to the user.c the user then check the launch time then add the duration that was pass from the main. then add the duration to the time launch, and keep checking the clock until it pass the added duration, then print it to the file.
+
+SYNTAX
+-h  			help menu
+
+-i  inputfilename	inputfilename is where the filename reads and it will show error if there is no filename found on the directory. output filename 
+			should be default name is "output.dat"  where the result is generated.
+ 
+-o  outputfilename      this command will use the default input file which is "input.dat" then create an output result to outputfilename(Which is the user specified name of the file).
+  
+-i inputfilename -o outputfilename     this command can use inputfilename (user choose the name)  and  generate output to the outputfilename(user choose the outputname) if it doesnt exist create one.  
+
+-n			max processor
+
+-s			max child processor executing at a time
+
+make			builds and creates exectuable 'p1'
+make clean		cleans object files and executables
+
+
+HOW ERROR CHECKING WORKS:
+When file is null error 
+shmt is error
+Didnt put error check readin the file if thers a lot of numbers.
+
+
+

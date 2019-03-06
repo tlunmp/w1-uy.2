@@ -19,11 +19,10 @@ int main (int argc, char *argv[]) {
 	int shareSeconds;
 	int shareNanoSeconds;	
 	int arr[2];
-	
+	char errorMessage[1000];	
 	shmid = shmget(SHMKEY, sizeof(arr[2]), 0666|IPC_CREAT);
 
 	
-	printf("%s\n",argv[2]);	
 	if(shmid < 0) {
 		perror("Error: shmget worker");
 		exit(errno);
@@ -47,6 +46,13 @@ int main (int argc, char *argv[]) {
 	
 
 	FILE *f1 = fopen(argv[2],"a");
+
+	if(f1 == NULL){
+		snprintf(errorMessage, sizeof(errorMessage), "%s: Error: ", argv[0]);
+	     	perror(errorMessage);	
+		return 0;
+	}
+
 
 	while(endDurationSeconds > shmPtr[0] || (endDurationSeconds == shmPtr[0] && endDurationNanoSeconds > shmPtr[1] ));
 	

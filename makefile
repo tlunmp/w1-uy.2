@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall 
+CFLAGS = 
 TARGET = oss
 TARGET1 = user 
 OBJ = main.o 
@@ -20,7 +20,7 @@ $(OBJ): $(SRC)
 	$(CC) $(CFLAGS) -c $(SRC)
 
 $(OBJ1): $(SRC1)
-	$(CC) $(CFLAGS) -c $(SRC1)
+	$(CC)  $(CFLAGS) -c $(SRC1)
 
 clean:
 	/bin/rm -f *.o $(TARGET)

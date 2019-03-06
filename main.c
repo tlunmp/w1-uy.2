@@ -10,7 +10,7 @@
 #define SHMKEY 9785
 
 void helpMenu();
-void forkProcess(int maxChildProcess, int numberChildProcess,char *inputFileName, char *outputFileName, int increment);
+void forkProcess(int maxChildProcess, int numberChildProcess,char *inputFileName, char *outputFileName, int increment, char *arg0Name);
 void shareClock(int increment);
 int countLines(FILE *file);
 
@@ -18,7 +18,7 @@ void signalCall(int signum);
 
 
 
-int timer = 10;
+int timer = 2;
 int shmid;
 int *shmPtr;
 
@@ -67,6 +67,8 @@ int main (int argc, char *argv[]) {
 
 	}
 
+	char errorMessage[100];
+
 	FILE *f = fopen(inputFileName,"r");
 	
 	// if file open error and return
@@ -83,33 +85,36 @@ int main (int argc, char *argv[]) {
 	fclose(f);
 
 	int increment = atoi(buffer);
-	int secClock = 0, nanoClock = 0;	
-	char *args[3];
-	int i, newLineCompare=0;
 	
-	FILE *f1 = fopen(inputFileName, "r");
+
+	if(maxChildProcess > 20){
+		fprintf(stderr,"%s: Error: Cannot have 20 or more max process\n",argv[0]);
+	}	 
+
 
 	 if (signal(SIGINT, signalCall) == SIG_ERR) {
-        	perror("Error: worker: signal(): SIGINT\n");
+        	snprintf(errorMessage, sizeof(errorMessage), "%s: Error: user: signal(): SIGINT\n", argv[0]);
+		perror(errorMessage);	
         	exit(errno);
   	  }
 	
 	if (signal(SIGALRM, signalCall) == SIG_ERR) {
-         perror("Error: worker: signal(): SIGALRM\n");
-         exit(errno);
+            snprintf(errorMessage, sizeof(errorMessage), "%s: Error: user: signal(): SIGALRM\n", argv[0]);
+	     perror(errorMessage);	
+         	exit(errno);
      	}
 	
 	alarm(timer);
-	forkProcess(maxChildProcess, numberChildProcess,inputFileName,outputFileName,increment);
+	forkProcess(maxChildProcess, numberChildProcess,inputFileName,outputFileName,increment,argv[0]);
 		
 		
 	return 0;
 }	
 
 
-void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, char *outputFileName,int increment) {
+void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, char *outputFileName,int increment,char *arg0Name) {
 		
-	int status, arr[2];
+	int arr[2];
 	char * args[2];
 
 	int bufSize = 100;
@@ -118,20 +123,18 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 	int newLineCount = 1;
 	int newLineCompare = 0;
 
-	int secClock = 0;
-	int nanoClock = 0;
 	
 	pid_t childpid;
 	int ptr_count = 0;
-
-
-	int maxChildCount = 0;
-
+	char errorMessage[1000];
 
 	
 
 	if((shmid = shmget(SHMKEY, sizeof(arr[2]), 0777 | IPC_CREAT )) < 0){
-           	printf("shmget failed in master\n");	
+           	
+
+
+		printf("shmget failed in master\n");	
 		exit(1);	
   	}
             	   	        
@@ -146,7 +149,6 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 	shmPtr[0] = 0; 
 	shmPtr[1] = 0; 
 
-	int flag = 0;
 		
 
 	
@@ -156,10 +158,7 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 
 	int stackSize = line *3;
 	
-
-	
 	int i,m=0;
-	
 
 	struct Clock clock[stackSize];
  
@@ -217,11 +216,20 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 				char duration[100];
 				sprintf(duration, "%d", clock[s].duration);
 				execl("./user","user",duration,outputFileName,(char *)0);
-				perror("exec didnt work");
+				 snprintf(errorMessage, sizeof(errorMessage), "%s: Error: ", arg0Name);
+	     			perror(errorMessage);	
 				exit(0);
 			
 			} else {
 				FILE *f3 = fopen(outputFileName,"a");
+				// if file open error and return
+				if(f3 == NULL){
+					 snprintf(errorMessage, sizeof(errorMessage), "%s: Error: ", arg0Name);
+	     				perror(errorMessage);	
+				}
+
+
+
 			fprintf(f3,"PID: %d, Launch Time: %d Seconds %d Nanoseconds\n",childpid,shmPtr[0], shmPtr[1]);
 		//printf("%d, parent main start launch %d and %d\n",getpid(),shmPtr[0], shmPtr[1]);
 				fclose(f3);
@@ -237,15 +245,15 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
  }
 
 
-
+//signal calls
 void signalCall(int signum)
 {
     int status;
   //  kill(0, SIGTERM);
     if (signum == SIGINT)
-        printf("\nSIGINT received by master\n");
+        printf("\nSIGINT received by main\n");
     else
-        printf("\nSIGALRM received by master\n");
+        printf("\nSIGALRM received by main\n");
  
     while(wait(&status) > 0) {
         if (WIFEXITED(status))  /* process exited normally */
@@ -280,35 +288,6 @@ int countLines(FILE *file) {
   return lines;
 }
 
-void shareClock(int increment){
-
-	int i,j;
-	pid_t childpid;
-
-
-	
-		for(;;) {
-	//			printf("%d and %d\n",shmPtr[0],shmPtr[1]);
-	//		if(secClockSet == shmPtr[0] && nanoClockSet > shmPtr[1]) {
-	//			//childpid = fork();
-				break;
-	//		}
-
-			if(shmPtr[1] > 1000000000) {
-				shmPtr[0]++;
-				shmPtr[1] = 0;
-			}
-
-		
-			shmPtr[1] += 20000;
-	
-		}
-
-
-
-//	printf("%d and %d\n",secClockSet,nanoClockSet);
-
-}
 //help menu
 void helpMenu() {
 		printf("---------------------------------------------------------------| Help Menu |--------------------------------------------------------------------------\n");
@@ -319,6 +298,8 @@ void helpMenu() {
 		printf("  				      | then create an output result to outputfilename(Which is the user specified name of the file \n"); 
 		printf("-i inputfilename -o outputfilename    | this command can use inputfilename (user choose the name)\n");
 		printf("				      | generate output to the outputfilename(user choose the outputname) if it doesnt exist create one.\n"); 
+		printf("-n int				      | int for max processor\n"); 
+		printf("-s int				      | int for max child processor\n"); 
 		printf("------------------------------------------------------------------------------------------------------------------------------------------------------\n");
 }
 
