@@ -16,6 +16,7 @@ int countLines(FILE *file);
 
 void signalCall(int signum);
 
+int errorCheckFile(char *inputFileName );
 
 
 int timer = 2;
@@ -37,8 +38,8 @@ int main (int argc, char *argv[]) {
 		
 	int newLineCount = 0;
 	int c;
-	int maxChildProcess = 0;
-	int numberChildProcess = 0;
+	int maxChildProcess = 4;
+	int numberChildProcess = 2;
 
 	
 
@@ -87,23 +88,34 @@ int main (int argc, char *argv[]) {
 	int increment = atoi(buffer);
 	
 
+	int errorResult = errorCheckFile(inputFileName);
+
+	if(errorResult == 1) {
+		fprintf(stderr,"%s: Error: Inside File have lot of arguments\n",argv[0]);
+		return 0;
+	}
+
+	//if max child process over 20 error
 	if(maxChildProcess > 20){
 		fprintf(stderr,"%s: Error: Cannot have 20 or more max process\n",argv[0]);
 	}	 
 
 
+	//signal error
 	 if (signal(SIGINT, signalCall) == SIG_ERR) {
         	snprintf(errorMessage, sizeof(errorMessage), "%s: Error: user: signal(): SIGINT\n", argv[0]);
 		perror(errorMessage);	
         	exit(errno);
   	  }
 	
+	//sigalarm error
 	if (signal(SIGALRM, signalCall) == SIG_ERR) {
             snprintf(errorMessage, sizeof(errorMessage), "%s: Error: user: signal(): SIGALRM\n", argv[0]);
 	     perror(errorMessage);	
          	exit(errno);
      	}
 	
+	//alarm for 2 real life second
 	alarm(timer);
 	forkProcess(maxChildProcess, numberChildProcess,inputFileName,outputFileName,increment,argv[0]);
 		
@@ -112,6 +124,54 @@ int main (int argc, char *argv[]) {
 }	
 
 
+int errorCheckFile(char *inputFileName ) {
+
+	FILE *f4 = fopen(inputFileName, "r") ;
+	int newLineCount = 1;
+	int newLineCompare = 0;
+	int bufSize = 100;
+	char buffer[bufSize];
+	int numberLength = 0;
+	int fileStackNumberCounter = 0;
+	int fileStackNumberCounter2 = 0;
+	
+	while(fgets(buffer,bufSize,f4)!= 0){
+	
+		if(newLineCompare == 0){
+				int o;
+				numberLength = strlen(buffer);	
+				for(o=0; o < numberLength; o++){	
+					if(isspace(buffer[o]) && !isspace(buffer[o+1])) {										
+						fileStackNumberCounter2++;
+					}
+				}
+
+
+
+		}	
+		if(newLineCount == newLineCompare) {
+			//check if there is 4 numbers terminates
+					int o;
+					numberLength = strlen(buffer);	
+					for(o=0; o < numberLength; o++){	
+						if(isspace(buffer[o]) && !isspace(buffer[o+1])) {										
+							fileStackNumberCounter++;
+						}
+
+					}
+
+		}
+		newLineCompare++;
+	}	
+
+	if(fileStackNumberCounter > 3 || fileStackNumberCounter2 > 1){
+		return 1;
+	}
+
+	
+	fclose(f4);
+	return 0;
+}
 void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, char *outputFileName,int increment,char *arg0Name) {
 		
 	int arr[2];
@@ -128,18 +188,17 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 	int ptr_count = 0;
 	char errorMessage[1000];
 
-	
-
+	//check error shmget
 	if((shmid = shmget(SHMKEY, sizeof(arr[2]), 0777 | IPC_CREAT )) < 0){
            	
-
-
 		printf("shmget failed in master\n");	
 		exit(1);	
   	}
-            	   	        
+            	
+	//put address    	        
 	char * shmaddr = ( char * )( shmat ( shmid, NULL, 0 ) );
-        shmPtr = ( int * )( shmaddr);
+        //pointer to the address
+	shmPtr = ( int * )( shmaddr);
             	   	                            
 	if(shmPtr == -1 ){
             	printf("shmat failed in master");
@@ -149,10 +208,15 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 	shmPtr[0] = 0; 
 	shmPtr[1] = 0; 
 
-		
-
 	
 	FILE *f1 = fopen(inputFileName,"r");
+				
+	if(f1 == NULL){
+		 snprintf(errorMessage, sizeof(errorMessage), "%s: Error: ", arg0Name);
+	     	perror(errorMessage);	
+		return;
+	}
+
 
 	int  line = countLines(f1)-1;
 
@@ -162,6 +226,7 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 
 	struct Clock clock[stackSize];
  
+	//parsing the text
 	while(fgets(buffer,bufSize,f1)!= 0){
 
 		if(newLineCount == newLineCompare) {
@@ -192,10 +257,13 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 	int totalCount = 0;
 
 
+	//only run the max child
 	while( totalCount < maxChildProcess || ptr_count > 0){
 		
 		shmPtr[1] += increment;
 
+
+		//clock incrementation
 		if(shmPtr[1] > 1000000000){
 			shmPtr[0]++;
 			shmPtr[1] -= 1000000000;
@@ -206,6 +274,7 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 				ptr_count--;
 			}
 
+		//launch time call exec to user.c
 		if( ptr_count < numChildProcess && shmPtr[0] == clock[s].seconds && shmPtr[1] > clock[s].nanoseconds){		
 			childpid = fork();
 			totalCount++;
@@ -221,7 +290,7 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 				exit(0);
 			
 			} else {
-				FILE *f3 = fopen(outputFileName,"a");
+				FILE *f3 = fopen(outputFileName,"a+");
 				// if file open error and return
 				if(f3 == NULL){
 					 snprintf(errorMessage, sizeof(errorMessage), "%s: Error: ", arg0Name);
@@ -261,7 +330,7 @@ void signalCall(int signum)
         else if (WIFSIGNALED(status))   /* child exited on a signal */
                 printf("User process exited due to signal %d\n", WTERMSIG(status));
         else if (WIFSTOPPED(status))    /* child was stopped */
-                printf("wUser process was stopped by signal %d\n", WIFSTOPPED(status));
+                printf("User process was stopped by signal %d\n", WIFSTOPPED(status));
     }
     kill(0, SIGTERM);
     //clean up program before exit (via interrupt signal)
@@ -271,7 +340,8 @@ void signalCall(int signum)
       exit(EXIT_SUCCESS);
  }
 
-  
+ 
+//count the lines of the file
    
 int countLines(FILE *file) {
   int lines = 0;

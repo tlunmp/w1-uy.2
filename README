@@ -25,7 +25,9 @@ make clean		cleans object files and executables
 HOW ERROR CHECKING WORKS:
 When file is null error 
 shmt is error
-Didnt put error check readin the file if thers a lot of numbers.
+file error check is there
 
+COMMON ERROR 
+-some bugs sometimes out put is funky
 
 
