@@ -89,19 +89,16 @@ int main (int argc, char *argv[]) {
 	
 	FILE *f1 = fopen(inputFileName, "r");
 
-	  if (signal(SIGINT, signalCall) == SIG_ERR) {
+	 if (signal(SIGINT, signalCall) == SIG_ERR) {
         	perror("Error: worker: signal(): SIGINT\n");
         	exit(errno);
   	  }
-
-
 	
-		
 	if (signal(SIGALRM, signalCall) == SIG_ERR) {
          perror("Error: worker: signal(): SIGALRM\n");
          exit(errno);
-     }
-
+     	}
+	
 	alarm(timer);
 	forkProcess(maxChildProcess, numberChildProcess,inputFileName,outputFileName,increment);
 		
@@ -190,80 +187,53 @@ void forkProcess(int maxChildProcess, int numChildProcess, char *inputFileName, 
 		newLineCompare++;
 	}
 	fclose(f1);
-/*
-		int l;
-		for(l=0; l<line; l++ ){
-
-			printf("%d %d %d\n", clock[l].seconds, clock[l].nanoseconds, clock[l].duration);
-		}
-*/
-
-		int s = 0;
-		int totalCount = 0;
-
-		while(i < line){
-				shmPtr[1] += increment;
-
-				if(shmPtr[1] > 1000000000){
-					shmPtr[0]++;
-					shmPtr[1] = 0;
-				}				
-				
-
-				if(shmPtr[0] == clock[s].seconds && shmPtr[1] > clock[s].nanoseconds){
-					
-					if(numChildProcess == ptr_count){
-						ptr_count--;
-					}	
-					
-					childpid = fork();
-					
-					totalCount++;
-					ptr_count++;
-				
-					if(childpid == 0){
-						char duration[100];
-						sprintf(duration, "%d", clock[s].duration);
-						execl("./user","user",duration,(char *)0);
-						exit(0);
-					} else {
-						childpid = wait(&status);
-					}
-				}				
-		}	
 		
 
-/*	for(;;){
-
-				
-				if(shmPtr[0] == clock[s].seconds && shmPtr[1] > clock[s].nanoseconds){
-					childpid = fork();
-					
-					while(waitpid(-1, &status, WNOHANG) > 0){
-						ptr_count--;
-					}
+	int s = 0;
+	int totalCount = 0;
 
 
-					if(childpid == 0){
-						execl("./user","user",clock[s].duration);
-						printf("this is a child");
-					} else {
-						//flag = 1;
-						s++;
-					}
-				}
+	while( totalCount < maxChildProcess || ptr_count > 0){
+		
+		shmPtr[1] += increment;
 
+		if(shmPtr[1] > 1000000000){
+			shmPtr[0]++;
+			shmPtr[1] -= 1000000000;
+		}				
+		
 
-				if(shmPtr[1] > 1000000000){
-					shmPtr[0]++;
-					shmPtr[1] = 0;
-				}
-				shmPtr[1] += 20000;
-			
-			
+			if(waitpid(0, NULL, WNOHANG) > 0){
+				ptr_count--;
 			}
-*/
 
+		if( ptr_count < numChildProcess && shmPtr[0] == clock[s].seconds && shmPtr[1] > clock[s].nanoseconds){		
+			childpid = fork();
+			totalCount++;
+			ptr_count++;
+
+					
+			if(childpid == 0){
+				char duration[100];
+				sprintf(duration, "%d", clock[s].duration);
+				execl("./user","user",duration,outputFileName,(char *)0);
+				perror("exec didnt work");
+				exit(0);
+			
+			} else {
+				FILE *f3 = fopen(outputFileName,"a");
+			fprintf(f3,"PID: %d, Launch Time: %d Seconds %d Nanoseconds\n",childpid,shmPtr[0], shmPtr[1]);
+		//printf("%d, parent main start launch %d and %d\n",getpid(),shmPtr[0], shmPtr[1]);
+				fclose(f3);
+			}
+			s++;
+		}	
+
+	}
+	
+	    shmdt(shmPtr); //detaches a section of shared memory
+    	shmctl(shmid, IPC_RMID, NULL);  // deallocate the memory    
+		
  }
 
 
@@ -279,11 +249,11 @@ void signalCall(int signum)
  
     while(wait(&status) > 0) {
         if (WIFEXITED(status))  /* process exited normally */
-                printf("worker process exited with value %d\n", WEXITSTATUS(status));
+                printf("User process exited with value %d\n", WEXITSTATUS(status));
         else if (WIFSIGNALED(status))   /* child exited on a signal */
-                printf("worker process exited due to signal %d\n", WTERMSIG(status));
+                printf("User process exited due to signal %d\n", WTERMSIG(status));
         else if (WIFSTOPPED(status))    /* child was stopped */
-                printf("worker process was stopped by signal %d\n", WIFSTOPPED(status));
+                printf("wUser process was stopped by signal %d\n", WIFSTOPPED(status));
     }
     kill(0, SIGTERM);
     //clean up program before exit (via interrupt signal)

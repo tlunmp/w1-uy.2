@@ -16,12 +16,14 @@ void signalCallback (int signum);
 
 int main (int argc, char *argv[]) {	
 
-	int masterShare = 0;	
+	int shareSeconds;
+	int shareNanoSeconds;	
 	int arr[2];
 	
 	shmid = shmget(SHMKEY, sizeof(arr[2]), 0666|IPC_CREAT);
 
 	
+	printf("%s\n",argv[2]);	
 	if(shmid < 0) {
 		perror("Error: shmget worker");
 		exit(errno);
@@ -29,21 +31,28 @@ int main (int argc, char *argv[]) {
 
 	shmPtr = (int *)(shmat(shmid, NULL, 0));
 	
-	masterShare = shmPtr[0];
-	int masterShare2 = shmPtr[1];
-	
+	shareSeconds = shmPtr[0];
+	shareNanoSeconds = shmPtr[1];
 
+	//printf("%d, main start launch %d and %d\n",getpid(),shmPtr[0], shmPtr[1]);
+	//printf("this first  %d and %d\n", shareSeconds, shareNanoSeconds);
 	
-	printf("share 1 %d\n",masterShare2);	
 	int duration = atoi(argv[1]);
 	
-	masterShare2 += duration;
-	
-	printf("share %d\n",masterShare2);	
-	
-	shmdt(shmPtr);
-	shmctl(shmid, IPC_RMID, NULL);
+	int endDurationSeconds = duration/(int)1E9 + shareSeconds;
+	int endDurationNanoSeconds = duration%(int)1E9 + shareNanoSeconds;
 
+
+	//printf("%d and %d\n", endDurationSeconds, endDurationNanoSeconds);	
+	
+
+	FILE *f1 = fopen(argv[2],"a");
+
+	while(endDurationSeconds > shmPtr[0] || (endDurationSeconds == shmPtr[0] && endDurationNanoSeconds > shmPtr[1] ));
+	
+	fprintf(f1,"PID: %d: Termination %d Seconds %d Nanoseconds\n",getpid(),shmPtr[0], shmPtr[1]);
+	
+	fclose(f1);
 	return 0;
 }
 

@@ -16,7 +16,6 @@ $(TARGET):$(OBJ)
 $(TARGET1):$(OBJ1)
 	$(CC) -o $(TARGET1) $(OBJ1)
 
-
 $(OBJ): $(SRC)
 	$(CC) $(CFLAGS) -c $(SRC)
 
